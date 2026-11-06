@@ -1,85 +1,69 @@
+import { parseGermanEntries } from './parser.js';
+
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === "FETCH_WORD_DATA") {
-    handleFetch(request)
-      .then(result => sendResponse({ success: true, data: result }))
-      .catch(err => {
-        console.error("Background fetch error:", err);
-        sendResponse({ success: false, error: err.message });
-      });
-    return true; // Keeps the messaging channel open for async fetch
+    fetchWordData(request.text, request.type, request.lang)
+      .then((data) => sendResponse({ success: true, data: data }))
+      .catch((err) => sendResponse({ success: false, error: err.message }));
+    return true; // Async channel open
   }
 });
 
-async function handleFetch(request) {
-  const { text, type, lang } = request;
-  const cleanedText = text.trim();
-
+async function fetchWordData(text, type, lang) {
   if (type === 'ai') {
-    const aiResult = await fetchAIFallback(cleanedText, lang);
-    return { type: 'ai', payload: aiResult };
-  } else {
-    const dictResult = await fetchWordData(cleanedText, lang);
-    return { type: 'dictionary', payload: dictResult };
+    return fetchAIFallback(text, lang);
   }
-}
 
-async function fetchWordData(text, lang) {
+  const cleanText = text.trim();
+
   if (lang === 'de') {
-    const deUrl = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=de|en`;
-    
-    const deRes = await fetch(deUrl);
-    if (!deRes.ok) throw new Error(`German translation request failed (${deRes.status})`);
-    
-    const deData = await deRes.json();
-    
-    if (!deData.responseData || !deData.responseData.translatedText) {
-      throw new Error(`Translation for "${text}" not found.`);
+    const url = `https://freedictionaryapi.com/api/v1/entries/de/${encodeURIComponent(cleanText)}`;
+    const res = await fetch(url);
+    if (!res.ok) {
+      throw new Error(`Word "${text}" not found in German dictionary.`);
     }
 
-    const primaryTranslation = deData.responseData.translatedText.trim();
+    const data = await res.json();
+    const entries = Array.isArray(data) ? data : (data.entries || []);
 
-    // Deduplicate and filter alternative translations safely
-    const alternatives = new Set();
-    if (Array.isArray(deData.matches)) {
-      deData.matches.forEach(m => {
-        if (m.translation) {
-          const clean = m.translation.trim();
-          if (clean.toLowerCase() !== primaryTranslation.toLowerCase() && clean.length < 30) {
-            alternatives.add(clean);
-          }
-        }
-      });
+    if (entries.length === 0) {
+      throw new Error(`Word "${text}" not found in German dictionary.`);
     }
 
-    // Infer part of speech safely without HTML parsing
-    const isCapitalized = /^[A-ZÄÖÜ]/.test(text);
-    const partOfSpeech = isCapitalized ? 'Noun' : 'Word / Phrase';
+    const parsedMeanings = parseGermanEntries(entries, text);
+    if (parsedMeanings.length === 0) {
+      throw new Error(`No definition meanings available for "${text}".`);
+    }
 
     return {
-      word: text,
-      partOfSpeech: partOfSpeech,
-      definition: primaryTranslation,
-      alternatives: Array.from(alternatives).slice(0, 3)
+      type: 'dictionary',
+      payload: {
+        word: text,
+        germanMeanings: parsedMeanings
+      }
     };
   } else {
-    // Standard English Free Dictionary API call
-    const enUrl = `https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(text)}`;
+    // English Free Dictionary API lookup
+    const enUrl = `https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(cleanText)}`;
     const enRes = await fetch(enUrl);
     if (!enRes.ok) throw new Error(`English dictionary entry not found (${enRes.status})`);
     const enData = await enRes.json();
-    return enData[0];
+    return {
+      type: 'dictionary',
+      payload: enData[0]
+    };
   }
 }
 
 async function fetchAIFallback(text, lang) {
   const storage = await chrome.storage.local.get(['openrouterKey']);
   if (!storage.openrouterKey) {
-    throw new Error('OpenRouter API key is missing. Please set it in the extension options.');
+    throw new Error('OpenRouter API key is missing. Please set it in options.');
   }
 
   const prompt = lang === 'de' 
-    ? `Provide a concise dictionary-style breakdown for the German word/phrase "${text}": grammatical gender, plural form if noun, short definition in English or German, and an example sentence.`
-    : `Provide a concise dictionary-style breakdown for "${text}": definition, part of speech, and an example sentence.`;
+    ? `Provide a concise dictionary breakdown for "${text}": gender, plural form, short English definition, and an example sentence.`
+    : `Provide a concise dictionary breakdown for "${text}": definition, part of speech, and an example sentence.`;
 
   const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
@@ -93,10 +77,7 @@ async function fetchAIFallback(text, lang) {
     })
   });
 
-  if (!response.ok) {
-    throw new Error(`AI API error: ${response.statusText}`);
-  }
-
+  if (!response.ok) throw new Error(`AI API error: ${response.statusText}`);
   const aiData = await response.json();
   return aiData.choices[0].message.content;
 }

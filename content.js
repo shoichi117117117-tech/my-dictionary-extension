@@ -1,24 +1,18 @@
 let popupHost = null;
-let currentLang = 'de'; // Global state for current selection language ('de' or 'en')
+let currentLang = 'de';
 
 document.addEventListener('mouseup', (event) => {
-  // Ignore mouseup if it happened inside our own popup
   if (popupHost && popupHost.contains(event.target)) return;
 
   const selectedText = window.getSelection().toString().trim();
-  
-  if (!selectedText) {
-    return;
-  }
+  if (!selectedText) return;
 
-  // Allow up to 6 words for phrases/sentences
   if (selectedText.length > 0 && selectedText.split(/\s+/).length <= 6) {
     const rect = window.getSelection().getRangeAt(0).getBoundingClientRect();
     showLookupButton(rect.left + window.scrollX, rect.bottom + window.scrollY + 5, selectedText);
   }
 });
 
-// Global listener to close popup when clicking outside
 document.addEventListener('mousedown', (event) => {
   if (popupHost && !popupHost.contains(event.target)) {
     removePopup();
@@ -54,14 +48,9 @@ function showLookupButton(x, y, text) {
   container.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.15)';
   container.style.border = '1px solid #e5e7eb';
 
-  container.addEventListener('mousedown', (e) => {
-    e.stopPropagation();
-  });
-  container.addEventListener('mouseup', (e) => {
-    e.stopPropagation();
-  });
+  container.addEventListener('mousedown', (e) => e.stopPropagation());
+  container.addEventListener('mouseup', (e) => e.stopPropagation());
 
-  // 1. Language Toggle Button (DE / EN)
   const langBtn = document.createElement('button');
   langBtn.innerText = currentLang.toUpperCase();
   langBtn.title = 'Click to switch language';
@@ -72,7 +61,6 @@ function showLookupButton(x, y, text) {
     langBtn.innerText = currentLang.toUpperCase();
   };
 
-  // 2. Dictionary Button
   const dictBtn = document.createElement('button');
   dictBtn.innerText = '📖 Dict';
   dictBtn.style.cssText = getButtonStyle('#f3f4f6', '#1f2937');
@@ -82,7 +70,6 @@ function showLookupButton(x, y, text) {
     fetchAndDisplayResults(x, y, text, 'dictionary', currentLang);
   };
 
-  // 3. AI Lookup Button
   const aiBtn = document.createElement('button');
   aiBtn.innerText = '🤖 AI';
   aiBtn.style.cssText = getButtonStyle('#eff6ff', '#1d4ed8');
@@ -142,8 +129,8 @@ function renderPopup(x, y, originalText, resultData, errorMessage, isLoading) {
     .dict-popup-card {
       position: absolute;
       z-index: 2147483647;
-      width: 300px;
-      max-height: 350px;
+      width: 320px;
+      max-height: 380px;
       overflow-y: auto;
       background: #ffffff;
       color: #1f2937;
@@ -160,7 +147,8 @@ function renderPopup(x, y, originalText, resultData, errorMessage, isLoading) {
     .dict-word { font-size: 15px; font-weight: 700; color: #111827; margin: 0; }
     .dict-close-btn { background: none; border: none; cursor: pointer; font-size: 14px; color: #9ca3af; }
     .dict-def { color: #374151; margin-bottom: 4px; }
-    .dict-example { color: #4b5563; font-style: italic; font-size: 12px; margin-left: 6px; border-left: 2px solid #0284c7; padding-left: 6px; margin-bottom: 4px; }
+    .dict-grammar { font-size: 11px; color: #6b7280; font-style: italic; margin-bottom: 4px; }
+    .dict-example { color: #4b5563; font-style: italic; font-size: 12px; margin-left: 4px; border-left: 2px solid #0284c7; padding-left: 6px; margin-top: 4px; margin-bottom: 4px; }
     .dict-audio-btn { background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; border-radius: 4px; padding: 3px 6px; cursor: pointer; font-size: 11px; font-weight: 600; margin-top: 4px; display: inline-flex; }
     .dict-error { color: #dc2626; font-size: 12px; }
     .dict-loading { color: #6b7280; font-style: italic; font-size: 12px; }
@@ -169,7 +157,7 @@ function renderPopup(x, y, originalText, resultData, errorMessage, isLoading) {
 
   const card = document.createElement('div');
   card.className = 'dict-popup-card';
-  card.style.left = `${Math.min(x, window.innerWidth - 320)}px`;
+  card.style.left = `${Math.min(x, window.innerWidth - 340)}px`;
   card.style.top = `${y}px`;
 
   let contentHtml = `<div class="dict-loading">Looking up definition...</div>`;
@@ -181,40 +169,47 @@ function renderPopup(x, y, originalText, resultData, errorMessage, isLoading) {
   } else if (resultData && resultData.type === 'dictionary') {
     const payload = resultData.payload;
 
-    if (payload.definition && currentLang === 'de') {
-      let altsHtml = '';
-      if (payload.alternatives && payload.alternatives.length > 0) {
-        altsHtml = `
-          <div style="margin-top: 8px; padding-top: 6px; border-top: 1px solid #f3f4f6; font-size: 12px; color: #4b5563;">
-            <b style="color: #374151;">Alternatives:</b> ${escapeHtml(payload.alternatives.join(', '))}
+    if (payload.germanMeanings && Array.isArray(payload.germanMeanings)) {
+      let sectionsHtml = '';
+      
+      payload.germanMeanings.forEach(meaning => {
+        let grammarHtml = '';
+        if (meaning.grammarNotes && meaning.grammarNotes.length > 0) {
+          grammarHtml = `<div class="dict-grammar">Grammar: ${escapeHtml(meaning.grammarNotes.join('; '))}</div>`;
+        }
+
+        let defsHtml = '';
+        meaning.definitions.forEach((def, i) => {
+          defsHtml += `<div class="dict-def"><b>${i+1}.</b> ${escapeHtml(def)}</div>`;
+        });
+
+        let examplesHtml = '';
+        if (meaning.examples && meaning.examples.length > 0) {
+          meaning.examples.forEach(ex => {
+            examplesHtml += `<div class="dict-example">"${escapeHtml(ex)}"</div>`;
+          });
+        }
+
+        sectionsHtml += `
+          <div style="margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid #f3f4f6;">
+            <div style="font-size: 11px; font-weight: 700; color: #0284c7; text-transform: uppercase; margin-bottom: 4px;">
+              ${escapeHtml(meaning.partOfSpeech)}
+            </div>
+            ${grammarHtml}
+            ${defsHtml}
+            ${examplesHtml}
           </div>
         `;
-      }
+      });
 
-      contentHtml = `
-        <div class="dict-section">
-          <div style="font-size: 10px; font-weight: 600; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">
-            German → English
-          </div>
-          <div style="font-weight: 700; font-size: 16px; margin-bottom: 6px; color: #0284c7;">
-            ${escapeHtml(payload.definition)}
-          </div>
-          ${altsHtml}
-        </div>
-      `;
-    } else if (payload.definition) {
-      // General definition format
-      contentHtml = `
-        <div style="font-weight: 700; font-size: 14px; margin-bottom: 4px; color: #0284c7;">${escapeHtml(payload.word)}</div>
-        <div style="line-height: 1.4; color: #374151;">${escapeHtml(payload.definition)}</div>
-      `;
+      contentHtml = `<div class="dict-section">${sectionsHtml}</div>`;
     } else if (Array.isArray(payload.meanings)) {
       // English Free Dictionary format
       const phoneticText = payload.phonetic || '';
       let defsHtml = '';
       const meaning = payload.meanings?.[0];
       if (meaning) {
-        meaning.definitions.slice(0, 2).forEach((def, i) => {
+        meaning.definitions.slice(0, 3).forEach((def, i) => {
           defsHtml += `<div class="dict-def"><b>${i+1}.</b> ${escapeHtml(def.definition)}</div>`;
           if (def.example) defsHtml += `<div class="dict-example">"${escapeHtml(def.example)}"</div>`;
         });
@@ -246,7 +241,6 @@ function renderPopup(x, y, originalText, resultData, errorMessage, isLoading) {
   shadowRoot.appendChild(card);
   document.body.appendChild(popupHost);
 
-  // Event bindings inside shadow DOM
   shadowRoot.getElementById('closeBtn').onclick = removePopup;
   
   const audioBtn = shadowRoot.getElementById('playAudio');
@@ -259,7 +253,6 @@ function renderPopup(x, y, originalText, resultData, errorMessage, isLoading) {
   }
 }
 
-// HTML escaper utility
 function escapeHtml(str) {
   if (typeof str !== 'string') return '';
   return str.replace(/[&<>'"]/g, 

@@ -1,0 +1,12 @@
+{
+    "name": "german-english-dictionary-extension",
+    "version": "1.0.0",
+    "type": "module",
+    "description": "Chrome extension for instant German-to-English dictionary and AI lookups.",
+    "scripts": {
+      "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js"
+    },
+    "devDependencies": {
+      "jest": "^29.7.0"
+    }
+  }
