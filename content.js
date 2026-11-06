@@ -68,7 +68,6 @@ function showLookupButton(x, y, text) {
   langBtn.style.cssText = getButtonStyle('#f3f4f6', '#4b5563');
   langBtn.onclick = (e) => {
     e.stopPropagation();
-    // Toggle state
     currentLang = currentLang === 'de' ? 'en' : 'de';
     langBtn.innerText = currentLang.toUpperCase();
   };
@@ -114,7 +113,6 @@ function getButtonStyle(bg, color) {
 }
 
 function fetchAndDisplayResults(x, y, text, type, lang) {
-  // Show loading state immediately
   renderPopup(x, y + 25, text, null, null, true);
 
   chrome.runtime.sendMessage(
@@ -184,19 +182,25 @@ function renderPopup(x, y, originalText, resultData, errorMessage, isLoading) {
     const payload = resultData.payload;
 
     if (payload.definition && currentLang === 'de') {
-      // Clean German-to-English translation display
       let altsHtml = '';
       if (payload.alternatives && payload.alternatives.length > 0) {
         altsHtml = `
-          <div style="margin-top: 8px; font-size: 12px; color: #4b5563; border-top: 1px solid #f3f4f6; pt: 6px;">
+          <div style="margin-top: 8px; padding-top: 6px; border-top: 1px solid #f3f4f6; font-size: 12px; color: #4b5563;">
             <b style="color: #374151;">Alternatives:</b> ${escapeHtml(payload.alternatives.join(', '))}
           </div>
         `;
       }
 
       contentHtml = `
-        <div style="font-weight: 700; font-size: 16px; margin-bottom: 6px; color: #0284c7;">${escapeHtml(payload.definition)}</div>
-        ${altsHtml}
+        <div class="dict-section">
+          <div style="font-size: 10px; font-weight: 600; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">
+            German → English
+          </div>
+          <div style="font-weight: 700; font-size: 16px; margin-bottom: 6px; color: #0284c7;">
+            ${escapeHtml(payload.definition)}
+          </div>
+          ${altsHtml}
+        </div>
       `;
     } else if (payload.definition) {
       // General definition format

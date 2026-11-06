@@ -36,30 +36,33 @@ async function fetchWordData(text, lang) {
       throw new Error(`Translation for "${text}" not found.`);
     }
 
-    const primaryTranslation = deData.responseData.translatedText;
+    const primaryTranslation = deData.responseData.translatedText.trim();
 
-    // Filter and clean up unique alternative translations
+    // Deduplicate and filter alternative translations safely
     const alternatives = new Set();
-    if (deData.matches && deData.matches.length > 0) {
+    if (Array.isArray(deData.matches)) {
       deData.matches.forEach(m => {
         if (m.translation) {
-          // Clean up HTML entities or weird punctuation if present
-          const cleanMatch = m.translation.trim();
-          if (cleanMatch.toLowerCase() !== primaryTranslation.toLowerCase() && cleanMatch.length < 30) {
-            alternatives.add(cleanMatch);
+          const clean = m.translation.trim();
+          if (clean.toLowerCase() !== primaryTranslation.toLowerCase() && clean.length < 30) {
+            alternatives.add(clean);
           }
         }
       });
     }
 
-    const altArray = Array.from(alternatives).slice(0, 3);
+    // Infer part of speech safely without HTML parsing
+    const isCapitalized = /^[A-ZÄÖÜ]/.test(text);
+    const partOfSpeech = isCapitalized ? 'Noun' : 'Word / Phrase';
 
     return {
       word: text,
+      partOfSpeech: partOfSpeech,
       definition: primaryTranslation,
-      alternatives: altArray
+      alternatives: Array.from(alternatives).slice(0, 3)
     };
   } else {
+    // Standard English Free Dictionary API call
     const enUrl = `https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(text)}`;
     const enRes = await fetch(enUrl);
     if (!enRes.ok) throw new Error(`English dictionary entry not found (${enRes.status})`);
