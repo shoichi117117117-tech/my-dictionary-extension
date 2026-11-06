@@ -11,7 +11,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
 async function fetchWordData(text, type, lang) {
   if (type === 'ai') {
-    return fetchAIFallback(text, lang);
+    const aiText = await fetchAIFallback(text, lang);
+    return {
+      type: 'ai',
+      payload: aiText
+    };
   }
 
   const cleanText = text.trim();
@@ -56,28 +60,39 @@ async function fetchWordData(text, type, lang) {
 }
 
 async function fetchAIFallback(text, lang) {
-  const storage = await chrome.storage.local.get(['openrouterKey']);
-  if (!storage.openrouterKey) {
+  // Safely retrieve stored OpenRouter API key from chrome.storage.local
+  const storage = await new Promise((resolve) => {
+    chrome.storage.local.get(['openrouterKey'], (result) => resolve(result));
+  });
+
+  const apiKey = storage.openrouterKey;
+  if (!apiKey) {
     throw new Error('OpenRouter API key is missing. Please set it in options.');
   }
 
   const prompt = lang === 'de' 
-    ? `Provide a concise dictionary breakdown for "${text}": gender, plural form, short English definition, and an example sentence.`
-    : `Provide a concise dictionary breakdown for "${text}": definition, part of speech, and an example sentence.`;
+    ? `Provide a concise dictionary breakdown for the German word "${text}": gender, plural form, short English definition, and an example sentence.`
+    : `Provide a concise dictionary breakdown for the English word "${text}": definition, part of speech, and an example sentence.`;
 
   const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
     headers: {
-      "Authorization": `Bearer ${storage.openrouterKey}`,
+      "Authorization": `Bearer ${apiKey}`,
+      "HTTP-Referer": "https://github.com/my-dictionary-extension",
+      "X-Title": "German English Dictionary Extension",
       "Content-Type": "application/json"
     },
     body: JSON.stringify({
-      model: "google/gemini-flash-1.5",
+      model: "google/gemini-2.5-flash",
       messages: [{ role: "user", content: prompt }]
     })
   });
 
-  if (!response.ok) throw new Error(`AI API error: ${response.statusText}`);
+  if (!response.ok) {
+    const errorBody = await response.text();
+    throw new Error(`AI API error (${response.status}): ${errorBody || response.statusText}`);
+  }
+
   const aiData = await response.json();
-  return aiData.choices[0].message.content;
+  return aiData.choices?.[0]?.message?.content || 'No AI response returned.';
 }

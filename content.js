@@ -145,7 +145,7 @@ function renderPopup(x, y, originalText, resultData, errorMessage, isLoading) {
     }
     .dict-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #f3f4f6; padding-bottom: 6px; margin-bottom: 8px; }
     .dict-word { font-size: 15px; font-weight: 700; color: #111827; margin: 0; }
-    .dict-close-btn { background: none; border: none; cursor: pointer; font-size: 14px; color: #9ca3af; }
+    .dict-close-btn { background: none; border: none; cursor: pointer; font-size: 14px; color: #9ca3af; padding: 2px 6px; }
     .dict-def { color: #374151; margin-bottom: 4px; }
     .dict-grammar { font-size: 11px; color: #6b7280; font-style: italic; margin-bottom: 4px; }
     .dict-example { color: #4b5563; font-style: italic; font-size: 12px; margin-left: 4px; border-left: 2px solid #0284c7; padding-left: 6px; margin-top: 4px; margin-bottom: 4px; }
@@ -204,7 +204,6 @@ function renderPopup(x, y, originalText, resultData, errorMessage, isLoading) {
 
       contentHtml = `<div class="dict-section">${sectionsHtml}</div>`;
     } else if (Array.isArray(payload.meanings)) {
-      // English Free Dictionary format
       const phoneticText = payload.phonetic || '';
       let defsHtml = '';
       const meaning = payload.meanings?.[0];
@@ -227,7 +226,21 @@ function renderPopup(x, y, originalText, resultData, errorMessage, isLoading) {
       `;
     }
   } else if (resultData && resultData.type === 'ai') {
-    contentHtml = `<div style="white-space: pre-wrap; font-size: 12px; color: #374151;">${escapeHtml(resultData.payload)}</div>`;
+    const formattedAiContent = escapeHtml(resultData.payload)
+      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+      .replace(/^[\*\-]\s+(.*)$/gm, '<li style="margin-bottom: 4px;">$1</li>')
+      .replace(/\n\n/g, '<br/>');
+
+    contentHtml = `
+      <div class="dict-ai-container" style="font-size: 13px; color: #374151; line-height: 1.5;">
+        <div style="font-size: 11px; font-weight: 700; color: #1d4ed8; text-transform: uppercase; margin-bottom: 8px;">
+          🤖 AI Breakdown
+        </div>
+        <ul style="padding-left: 16px; margin: 0; list-style-type: disc;">
+          ${formattedAiContent}
+        </ul>
+      </div>
+    `;
   }
 
   card.innerHTML = `
