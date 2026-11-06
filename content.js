@@ -183,8 +183,23 @@ function renderPopup(x, y, originalText, resultData, errorMessage, isLoading) {
   } else if (resultData && resultData.type === 'dictionary') {
     const payload = resultData.payload;
 
-    if (payload.definition) {
-      // German Wiktionary format ({ word, definition })
+    if (payload.definition && currentLang === 'de') {
+      // Clean German-to-English translation display
+      let altsHtml = '';
+      if (payload.alternatives && payload.alternatives.length > 0) {
+        altsHtml = `
+          <div style="margin-top: 8px; font-size: 12px; color: #4b5563; border-top: 1px solid #f3f4f6; pt: 6px;">
+            <b style="color: #374151;">Alternatives:</b> ${escapeHtml(payload.alternatives.join(', '))}
+          </div>
+        `;
+      }
+
+      contentHtml = `
+        <div style="font-weight: 700; font-size: 16px; margin-bottom: 6px; color: #0284c7;">${escapeHtml(payload.definition)}</div>
+        ${altsHtml}
+      `;
+    } else if (payload.definition) {
+      // General definition format
       contentHtml = `
         <div style="font-weight: 700; font-size: 14px; margin-bottom: 4px; color: #0284c7;">${escapeHtml(payload.word)}</div>
         <div style="line-height: 1.4; color: #374151;">${escapeHtml(payload.definition)}</div>

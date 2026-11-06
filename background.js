@@ -25,7 +25,6 @@ async function handleFetch(request) {
 
 async function fetchWordData(text, lang) {
   if (lang === 'de') {
-    // Using MyMemory Free Translation API for German -> English
     const deUrl = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=de|en`;
     
     const deRes = await fetch(deUrl);
@@ -37,25 +36,30 @@ async function fetchWordData(text, lang) {
       throw new Error(`Translation for "${text}" not found.`);
     }
 
-    const translation = deData.responseData.translatedText;
+    const primaryTranslation = deData.responseData.translatedText;
 
-    // Optional: Collect matched matches/synonyms if available
-    let matchesHtml = '';
+    // Filter and clean up unique alternative translations
+    const alternatives = new Set();
     if (deData.matches && deData.matches.length > 0) {
-      const topMatches = deData.matches.slice(1, 4); // Get a few alternatives
-      topMatches.forEach(m => {
-        if (m.translation && m.translation.toLowerCase() !== translation.toLowerCase()) {
-          matchesHtml += `• ${m.translation}\n`;
+      deData.matches.forEach(m => {
+        if (m.translation) {
+          // Clean up HTML entities or weird punctuation if present
+          const cleanMatch = m.translation.trim();
+          if (cleanMatch.toLowerCase() !== primaryTranslation.toLowerCase() && cleanMatch.length < 30) {
+            alternatives.add(cleanMatch);
+          }
         }
       });
     }
 
+    const altArray = Array.from(alternatives).slice(0, 3);
+
     return {
       word: text,
-      definition: `English Translation:\n${translation}\n${matchesHtml ? '\nAlternatives:\n' + matchesHtml : ''}`
+      definition: primaryTranslation,
+      alternatives: altArray
     };
   } else {
-    // Existing English Free Dictionary API
     const enUrl = `https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(text)}`;
     const enRes = await fetch(enUrl);
     if (!enRes.ok) throw new Error(`English dictionary entry not found (${enRes.status})`);
