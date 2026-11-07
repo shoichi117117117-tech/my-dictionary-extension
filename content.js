@@ -7,7 +7,7 @@ document.addEventListener('mouseup', (event) => {
   const selectedText = window.getSelection().toString().trim();
   if (!selectedText) return;
 
-  // Allow up to sentence length selection for AI or lookups
+  // Allow up to 25 words for multi-word or sentence selections
   if (selectedText.length > 0 && selectedText.split(/\s+/).length <= 25) {
     const rect = window.getSelection().getRangeAt(0).getBoundingClientRect();
     showLookupButton(rect.left + window.scrollX, rect.bottom + window.scrollY + 5, selectedText);
@@ -16,14 +16,11 @@ document.addEventListener('mouseup', (event) => {
 
 document.addEventListener('mousedown', (event) => {
   const actionBar = document.querySelector('.dict-action-bar');
-  
-  // If an action bar is open and the click is outside of it, remove everything
   if (actionBar && !actionBar.contains(event.target)) {
     removePopup();
     return;
   }
 
-  // If the popup card is open and the click is outside of it, remove it
   if (popupHost && !popupHost.contains(event.target)) {
     removePopup();
   }
@@ -154,7 +151,8 @@ function renderPopup(x, y, originalText, resultData, errorMessage, isLoading) {
       border: 1px solid #e5e7eb;
     }
     .dict-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #f3f4f6; padding-bottom: 6px; margin-bottom: 8px; }
-    .dict-word { font-size: 15px; font-weight: 700; color: #111827; margin: 0; word-break: break-word; max-width: 240px; }
+    .dict-word { font-size: 14px; font-weight: 700; color: #111827; margin: 0; word-break: break-word; max-width: 240px; }
+    .dict-sentence-header { font-size: 12px; font-style: italic; color: #4b5563; background: #f9fafb; padding: 6px 8px; border-radius: 6px; margin-bottom: 8px; border-left: 3px solid #1d4ed8; word-break: break-word; }
     .dict-close-btn { background: none; border: none; cursor: pointer; font-size: 14px; color: #9ca3af; padding: 2px 6px; }
     .dict-def { color: #374151; margin-bottom: 4px; }
     .dict-grammar { font-size: 11px; color: #6b7280; font-style: italic; margin-bottom: 4px; }
@@ -169,6 +167,10 @@ function renderPopup(x, y, originalText, resultData, errorMessage, isLoading) {
   card.className = 'dict-popup-card';
   card.style.left = `${Math.min(x, window.innerWidth - 340)}px`;
   card.style.top = `${y}px`;
+
+  // Detect whether the input is a single word/token or a multi-word sentence
+  const wordCount = originalText.trim().split(/\s+/).length;
+  const isSentence = wordCount > 1;
 
   let contentHtml = `<div class="dict-loading">Looking up definition...</div>`;
 
@@ -245,35 +247,64 @@ function renderPopup(x, y, originalText, resultData, errorMessage, isLoading) {
       .replace(/^[\*\-]\s+(.*)$/gm, '<li style="margin-bottom: 4px;">$1</li>')
       .replace(/\n\n/g, '<br/>');
 
-    contentHtml = `
-      <div class="dict-ai-container" style="font-size: 13px; color: #374151; line-height: 1.5;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-          <div style="font-size: 11px; font-weight: 700; color: #1d4ed8; text-transform: uppercase;">
-            🤖 AI Breakdown
+    // Conditional UI layout depending on whether it's a single word vs a sentence
+    if (isSentence) {
+      contentHtml = `
+        <div class="dict-ai-container" style="font-size: 13px; color: #374151; line-height: 1.5;">
+          <div class="dict-sentence-header">"${escapeHtml(originalText)}"</div>
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+            <div style="font-size: 11px; font-weight: 700; color: #1d4ed8; text-transform: uppercase;">
+              🌐 Sentence Context & Breakdown
+            </div>
+            <button class="dict-audio-btn" id="playAiSpeech">🔊 Listen</button>
           </div>
-          <button class="dict-audio-btn" id="playAiSpeech">🔊 Listen</button>
+          <ul style="padding-left: 16px; margin: 0; list-style-type: disc;">
+            ${formattedAiContent}
+          </ul>
         </div>
-        <ul style="padding-left: 16px; margin: 0; list-style-type: disc;">
-          ${formattedAiContent}
-        </ul>
+      `;
+    } else {
+      contentHtml = `
+        <div class="dict-ai-container" style="font-size: 13px; color: #374151; line-height: 1.5;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+            <div style="font-size: 11px; font-weight: 700; color: #1d4ed8; text-transform: uppercase;">
+              🤖 AI Word Breakdown
+            </div>
+            <button class="dict-audio-btn" id="playAiSpeech">🔊 Listen</button>
+          </div>
+          <ul style="padding-left: 16px; margin: 0; list-style-type: disc;">
+            ${formattedAiContent}
+          </ul>
+        </div>
+      `;
+    }
+  }
+
+  // Header formatting based on length type
+  let headerHtml = '';
+  if (isSentence) {
+    headerHtml = `
+      <div class="dict-header">
+        <span style="font-size: 11px; font-weight: 700; color: #6b7280; text-transform: uppercase;">Selected Sentence</span>
+        <button class="dict-close-btn" id="closeBtn">✕</button>
+      </div>
+    `;
+  } else {
+    headerHtml = `
+      <div class="dict-header">
+        <h3 class="dict-word">${escapeHtml(originalText)}</h3>
+        <button class="dict-close-btn" id="closeBtn">✕</button>
       </div>
     `;
   }
 
-  card.innerHTML = `
-    <div class="dict-header">
-      <h3 class="dict-word">${escapeHtml(originalText)}</h3>
-      <button class="dict-close-btn" id="closeBtn">✕</button>
-    </div>
-    ${contentHtml}
-  `;
+  card.innerHTML = headerHtml + contentHtml;
 
   shadowRoot.appendChild(card);
   document.body.appendChild(popupHost);
 
   shadowRoot.getElementById('closeBtn').onclick = removePopup;
   
-  // Wire up Text-to-Speech audio buttons
   const germanSpeechBtn = shadowRoot.getElementById('playGermanSpeech');
   if (germanSpeechBtn) {
     germanSpeechBtn.onclick = () => speakText(originalText, currentLang);
@@ -290,16 +321,6 @@ function escapeHtml(str) {
   return str.replace(/[&<>'"]/g, 
     tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag] || tag)
   );
-}
-
-let cachedVoices = [];
-
-// Pre-load and cache voices when they become available
-if ('speechSynthesis' in window) {
-  cachedVoices = window.speechSynthesis.getVoices();
-  window.speechSynthesis.onvoiceschanged = () => {
-    cachedVoices = window.speechSynthesis.getVoices();
-  };
 }
 
 function speakText(text, lang = 'de') {
