@@ -15,6 +15,15 @@ document.addEventListener('mouseup', (event) => {
 });
 
 document.addEventListener('mousedown', (event) => {
+  const actionBar = document.querySelector('.dict-action-bar');
+  
+  // If an action bar is open and the click is outside of it, remove everything
+  if (actionBar && !actionBar.contains(event.target)) {
+    removePopup();
+    return;
+  }
+
+  // If the popup card is open and the click is outside of it, remove it
   if (popupHost && !popupHost.contains(event.target)) {
     removePopup();
   }
