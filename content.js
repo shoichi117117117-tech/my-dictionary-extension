@@ -7,7 +7,8 @@ document.addEventListener('mouseup', (event) => {
   const selectedText = window.getSelection().toString().trim();
   if (!selectedText) return;
 
-  if (selectedText.length > 0 && selectedText.split(/\s+/).length <= 6) {
+  // Allow up to sentence length selection for AI or lookups
+  if (selectedText.length > 0 && selectedText.split(/\s+/).length <= 25) {
     const rect = window.getSelection().getRangeAt(0).getBoundingClientRect();
     showLookupButton(rect.left + window.scrollX, rect.bottom + window.scrollY + 5, selectedText);
   }
@@ -144,12 +145,12 @@ function renderPopup(x, y, originalText, resultData, errorMessage, isLoading) {
       border: 1px solid #e5e7eb;
     }
     .dict-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #f3f4f6; padding-bottom: 6px; margin-bottom: 8px; }
-    .dict-word { font-size: 15px; font-weight: 700; color: #111827; margin: 0; }
+    .dict-word { font-size: 15px; font-weight: 700; color: #111827; margin: 0; word-break: break-word; max-width: 240px; }
     .dict-close-btn { background: none; border: none; cursor: pointer; font-size: 14px; color: #9ca3af; padding: 2px 6px; }
     .dict-def { color: #374151; margin-bottom: 4px; }
     .dict-grammar { font-size: 11px; color: #6b7280; font-style: italic; margin-bottom: 4px; }
     .dict-example { color: #4b5563; font-style: italic; font-size: 12px; margin-left: 4px; border-left: 2px solid #0284c7; padding-left: 6px; margin-top: 4px; margin-bottom: 4px; }
-    .dict-audio-btn { background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; border-radius: 4px; padding: 3px 6px; cursor: pointer; font-size: 11px; font-weight: 600; margin-top: 4px; display: inline-flex; }
+    .dict-audio-btn { background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; border-radius: 4px; padding: 3px 6px; cursor: pointer; font-size: 11px; font-weight: 600; display: inline-flex; align-items: center; gap: 3px; }
     .dict-error { color: #dc2626; font-size: 12px; }
     .dict-loading { color: #6b7280; font-style: italic; font-size: 12px; }
   `;
@@ -202,7 +203,12 @@ function renderPopup(x, y, originalText, resultData, errorMessage, isLoading) {
         `;
       });
 
-      contentHtml = `<div class="dict-section">${sectionsHtml}</div>`;
+      contentHtml = `
+        <div style="margin-bottom: 8px;">
+          <button class="dict-audio-btn" id="playGermanSpeech">🔊 Pronounce Text</button>
+        </div>
+        <div class="dict-section">${sectionsHtml}</div>
+      `;
     } else if (Array.isArray(payload.meanings)) {
       const phoneticText = payload.phonetic || '';
       let defsHtml = '';
@@ -214,14 +220,13 @@ function renderPopup(x, y, originalText, resultData, errorMessage, isLoading) {
         });
       }
 
-      const audioObj = payload.phonetics?.find(p => p.audio?.length > 0);
-      const audioUrl = audioObj ? (audioObj.audio.startsWith('//') ? `https:${audioObj.audio}` : audioObj.audio) : null;
-
       contentHtml = `
         <div class="dict-section">
           <div style="font-size:11px; font-weight:600; color:#6b7280; text-transform:uppercase; margin-bottom: 6px;">${meaning?.partOfSpeech || ''} ${phoneticText ? `(${phoneticText})` : ''}</div>
           ${defsHtml}
-          ${audioUrl ? `<button class="dict-audio-btn" id="playAudio">🔊 Pronunciation</button>` : ''}
+          <div style="margin-top: 8px;">
+            <button class="dict-audio-btn" id="playGermanSpeech">🔊 Pronounce Text</button>
+          </div>
         </div>
       `;
     }
@@ -233,8 +238,11 @@ function renderPopup(x, y, originalText, resultData, errorMessage, isLoading) {
 
     contentHtml = `
       <div class="dict-ai-container" style="font-size: 13px; color: #374151; line-height: 1.5;">
-        <div style="font-size: 11px; font-weight: 700; color: #1d4ed8; text-transform: uppercase; margin-bottom: 8px;">
-          🤖 AI Breakdown
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+          <div style="font-size: 11px; font-weight: 700; color: #1d4ed8; text-transform: uppercase;">
+            🤖 AI Breakdown
+          </div>
+          <button class="dict-audio-btn" id="playAiSpeech">🔊 Listen</button>
         </div>
         <ul style="padding-left: 16px; margin: 0; list-style-type: disc;">
           ${formattedAiContent}
@@ -256,13 +264,15 @@ function renderPopup(x, y, originalText, resultData, errorMessage, isLoading) {
 
   shadowRoot.getElementById('closeBtn').onclick = removePopup;
   
-  const audioBtn = shadowRoot.getElementById('playAudio');
-  if (audioBtn && resultData?.payload?.phonetics) {
-    const audioObj = resultData.payload.phonetics.find(p => p.audio?.length > 0);
-    if (audioObj) {
-      const audioUrl = audioObj.audio.startsWith('//') ? `https:${audioObj.audio}` : audioObj.audio;
-      audioBtn.onclick = () => new Audio(audioUrl).play().catch(e => console.error(e));
-    }
+  // Wire up Text-to-Speech audio buttons
+  const germanSpeechBtn = shadowRoot.getElementById('playGermanSpeech');
+  if (germanSpeechBtn) {
+    germanSpeechBtn.onclick = () => speakText(originalText, currentLang);
+  }
+
+  const aiSpeechBtn = shadowRoot.getElementById('playAiSpeech');
+  if (aiSpeechBtn) {
+    aiSpeechBtn.onclick = () => speakText(originalText, currentLang);
   }
 }
 
@@ -271,4 +281,23 @@ function escapeHtml(str) {
   return str.replace(/[&<>'"]/g, 
     tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag] || tag)
   );
+}
+
+let cachedVoices = [];
+
+// Pre-load and cache voices when they become available
+if ('speechSynthesis' in window) {
+  cachedVoices = window.speechSynthesis.getVoices();
+  window.speechSynthesis.onvoiceschanged = () => {
+    cachedVoices = window.speechSynthesis.getVoices();
+  };
+}
+
+function speakText(text, lang = 'de') {
+  if (!('speechSynthesis' in window)) return;
+  window.speechSynthesis.cancel();
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.lang = lang === 'de' ? 'de-DE' : 'en-US';
+  utterance.rate = 0.9;
+  window.speechSynthesis.speak(utterance);
 }
