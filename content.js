@@ -151,9 +151,11 @@ function renderPopup(x, y, originalText, resultData, errorMessage, isLoading) {
       border: 1px solid #e5e7eb;
     }
     .dict-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #f3f4f6; padding-bottom: 6px; margin-bottom: 8px; }
-    .dict-word { font-size: 14px; font-weight: 700; color: #111827; margin: 0; word-break: break-word; max-width: 240px; }
+    .dict-word { font-size: 14px; font-weight: 700; color: #111827; margin: 0; word-break: break-word; max-width: 200px; }
     .dict-sentence-header { font-size: 12px; font-style: italic; color: #4b5563; background: #f9fafb; padding: 6px 8px; border-radius: 6px; margin-bottom: 8px; border-left: 3px solid #1d4ed8; word-break: break-word; }
     .dict-close-btn { background: none; border: none; cursor: pointer; font-size: 14px; color: #9ca3af; padding: 2px 6px; }
+    .dict-save-btn { background: #f3f4f6; color: #374151; border: 1px solid #d1d5db; border-radius: 4px; padding: 3px 6px; cursor: pointer; font-size: 11px; font-weight: 600; display: inline-flex; align-items: center; gap: 3px; }
+    .dict-save-btn:hover { background: #e5e7eb; }
     .dict-def { color: #374151; margin-bottom: 4px; }
     .dict-grammar { font-size: 11px; color: #6b7280; font-style: italic; margin-bottom: 4px; }
     .dict-example { color: #4b5563; font-style: italic; font-size: 12px; margin-left: 4px; border-left: 2px solid #0284c7; padding-left: 6px; margin-top: 4px; margin-bottom: 4px; }
@@ -247,7 +249,6 @@ function renderPopup(x, y, originalText, resultData, errorMessage, isLoading) {
       .replace(/^[\*\-]\s+(.*)$/gm, '<li style="margin-bottom: 4px;">$1</li>')
       .replace(/\n\n/g, '<br/>');
 
-    // Conditional UI layout depending on whether it's a single word vs a sentence
     if (isSentence) {
       contentHtml = `
         <div class="dict-ai-container" style="font-size: 13px; color: #374151; line-height: 1.5;">
@@ -280,20 +281,27 @@ function renderPopup(x, y, originalText, resultData, errorMessage, isLoading) {
     }
   }
 
-  // Header formatting based on length type
+  // Header formatting based on length type with Save button
+  const saveBtnId = `saveBtn_${Date.now()}`;
   let headerHtml = '';
   if (isSentence) {
     headerHtml = `
       <div class="dict-header">
         <span style="font-size: 11px; font-weight: 700; color: #6b7280; text-transform: uppercase;">Selected Sentence</span>
-        <button class="dict-close-btn" id="closeBtn">✕</button>
+        <div style="display: flex; gap: 6px; align-items: center;">
+          <button class="dict-save-btn" id="${saveBtnId}">💾 Save</button>
+          <button class="dict-close-btn" id="closeBtn">✕</button>
+        </div>
       </div>
     `;
   } else {
     headerHtml = `
       <div class="dict-header">
         <h3 class="dict-word">${escapeHtml(originalText)}</h3>
-        <button class="dict-close-btn" id="closeBtn">✕</button>
+        <div style="display: flex; gap: 6px; align-items: center;">
+          <button class="dict-save-btn" id="${saveBtnId}">💾 Save</button>
+          <button class="dict-close-btn" id="closeBtn">✕</button>
+        </div>
       </div>
     `;
   }
@@ -304,6 +312,28 @@ function renderPopup(x, y, originalText, resultData, errorMessage, isLoading) {
   document.body.appendChild(popupHost);
 
   shadowRoot.getElementById('closeBtn').onclick = removePopup;
+
+  // Wire up save functionality
+  const saveBtn = shadowRoot.getElementById(saveBtnId);
+  if (saveBtn) {
+    saveBtn.onclick = () => {
+      chrome.runtime.sendMessage({
+        action: "SAVE_WORD",
+        text: originalText,
+        type: resultData?.type || 'ai',
+        lang: currentLang,
+        payload: resultData?.payload || ''
+      }, (res) => {
+        if (res && res.success) {
+          saveBtn.innerText = '✅ Saved';
+          saveBtn.style.background = '#dcfce7';
+          saveBtn.style.color = '#166534';
+        } else if (res && res.reason === "Already saved") {
+          saveBtn.innerText = '✔️ Saved';
+        }
+      });
+    };
+  }
   
   const germanSpeechBtn = shadowRoot.getElementById('playGermanSpeech');
   if (germanSpeechBtn) {

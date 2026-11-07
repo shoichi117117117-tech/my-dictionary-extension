@@ -7,6 +7,32 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       .catch((err) => sendResponse({ success: false, error: err.message }));
     return true; // Async channel open
   }
+  
+  if (request.action === "SAVE_WORD") {
+    chrome.storage.local.get({ savedWords: [] }, (result) => {
+      const savedWords = result.savedWords;
+      const newItem = {
+        id: Date.now(),
+        text: request.text,
+        type: request.type, // 'dictionary' or 'ai'
+        lang: request.lang,
+        payload: request.payload,
+        timestamp: new Date().toLocaleDateString()
+      };
+
+      // Prevent duplicate exact texts
+      const exists = savedWords.some(w => w.text.toLowerCase() === request.text.toLowerCase());
+      if (!exists) {
+        savedWords.unshift(newItem);
+        chrome.storage.local.set({ savedWords }, () => {
+          sendResponse({ success: true });
+        });
+      } else {
+        sendResponse({ success: false, reason: "Already saved" });
+      }
+    });
+    return true; // Keep channel open for async response
+  }
 });
 
 async function fetchWordData(text, type, lang) {
